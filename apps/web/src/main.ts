@@ -1,5 +1,11 @@
-import { createApp } from "vue";
 import { createPinia } from "pinia";
+import { createApp } from "vue";
+
 import App from "./App.vue";
 
-createApp(App).use(createPinia()).mount("#app");
+const app = createApp(App);
+
+// 这里只注册 Pinia，聊天状态由学生实现。
+app.use(createPinia());
+
+app.mount("#app");
