@@ -61,3 +61,10 @@ export type NewChatMessage = Omit<ChatMessage, "id">;
  * Partial表示content可以不提供。
  */
 export type UpdateChatMessage = Partial<Pick<ChatMessage, "content">>;
+
+// 模型适配层只产生正文增量和结束事件。
+export type ModelStreamEvent =
+  { type: "delta"; text: string } | { type: "done"; finishReason: string };
+
+// 路由层还可以向浏览器报告生成过程中的错误。
+export type ChatStreamEvent = ModelStreamEvent | { type: "error"; message: string };

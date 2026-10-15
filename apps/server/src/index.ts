@@ -6,6 +6,7 @@ import path from "node:path";
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.env") });
 import express from "express";
 import chatRouter from "./routes/chat.js";
+import { chatStreamRouter } from "./routes/chat-stream.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -19,6 +20,7 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.use(chatRouter);
+app.use(chatStreamRouter);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

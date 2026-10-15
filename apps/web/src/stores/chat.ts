@@ -1,55 +1,116 @@
-import type { ChatMessage, NewChatMessage } from "@campus-ai/shared-types";
+import type { ChatMessage, ChatRequest } from "@campus-ai/shared-types";
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { reactive, ref } from "vue";
 
-import { requestChat } from "../api/chat";
+import { requestChatStream } from "../api/chat-stream";
 
-function createMessage(message: NewChatMessage): ChatMessage {
-  return {
-    id: crypto.randomUUID(),
-    ...message,
-  };
-}
+// notice 只用于界面提示，不发送给模型。
+type ViewMessage = ChatMessage & { notice: string };
 
 export const useChatStore = defineStore("chat", () => {
-  // 关键知识点1：Store中的响应式状态只定义一次。
-  const messages = ref<ChatMessage[]>([]);
+  const messages = ref<ViewMessage[]>([]);
   const isSending = ref(false);
   const errorMessage = ref<string | null>(null);
+  const canRetry = ref(false);
 
-  async function sendMessage(content: string): Promise<void> {
-    const text = content.trim();
-    // 关键知识点2：阻止空消息和重复提交。
-    if (!text || isSending.value) {
-      return;
-    }
+  // 页面保留所有消息；模型历史只保留成功完成的对话。
+  let completedHistory: ChatMessage[] = [];
+  let lastRequest: ChatRequest | null = null;
+  let lastReply: ViewMessage | null = null;
+  let controller: AbortController | null = null;
 
-    const userMessage = createMessage({
-      role: "user",
-      content: text,
-    });
-    messages.value.push(userMessage);
+  async function generateReply(): Promise<void> {
+    if (isSending.value || !lastRequest || !lastReply) return;
+
+    const request = lastRequest;
+    const reply = lastReply;
+    const requestController = new AbortController();
+    controller = requestController;
+
     isSending.value = true;
+    canRetry.value = false;
     errorMessage.value = null;
+    reply.content = "";
+    reply.notice = "";
+
     try {
-      // 关键知识点3：发送聊天记录快照，为以后多轮对话保留结构。
-      const result = await requestChat({
-        messages: [...messages.value],
-      });
-      messages.value.push(result.data);
+      const finishReason = await requestChatStream(
+        request,
+        (text) => {
+          reply.content += text;
+        },
+        requestController.signal,
+      );
+
+      if (finishReason !== "stop") {
+        reply.notice = `生成已结束（${finishReason}），回答可能不完整，可重试。`;
+        canRetry.value = true;
+        return;
+      }
+
+      if (!reply.content.trim()) throw new Error("模型未返回可显示的正文");
+
+      completedHistory = [
+        ...request.messages,
+        { id: reply.id, role: reply.role, content: reply.content },
+      ];
     } catch (error: unknown) {
-      // 关键知识点4：unknown经过类型守卫后才能安全读取message。
-      errorMessage.value = error instanceof Error ? error.message : "发送失败，请稍后重试";
+      if (requestController.signal.aborted) {
+        reply.notice = "已停止，回答未完成。";
+      } else {
+        errorMessage.value =
+          error instanceof Error
+            ? error.name === "TimeoutError"
+              ? "等待超时，请重试"
+              : error.message
+            : "发送失败，请重试";
+        reply.notice = "生成失败，已接收内容可能不完整。";
+      }
+      canRetry.value = true;
     } finally {
-      // 无论成功或失败，都必须恢复发送状态。
+      controller = null;
       isSending.value = false;
     }
   }
-  // 关键知识点5：只有返回的内容才能被Vue组件使用。
+
+  async function sendMessage(content: string): Promise<void> {
+    const text = content.trim();
+    if (!text || isSending.value) return;
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+    };
+    messages.value.push({ ...userMessage, notice: "" });
+
+    // 必须先取请求快照，再创建空的助手消息。
+    lastRequest = { messages: [...completedHistory, userMessage] };
+
+    // reactive 确保通过 reply.content 追加时，Vue 能更新界面。
+    lastReply = reactive<ViewMessage>({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+      notice: "",
+    });
+    messages.value.push(lastReply);
+
+    await generateReply();
+  }
+
+  function stopGenerating(): void {
+    // 不在这里解锁；等待请求退出后由 finally 统一恢复状态。
+    controller?.abort();
+  }
+
   return {
     messages,
     isSending,
     errorMessage,
+    canRetry,
     sendMessage,
+    stopGenerating,
+    retryMessage: generateReply,
   };
 });

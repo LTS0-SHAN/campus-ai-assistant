@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 import MessageItem from "./components/MessageItem.vue";
 import { useChatStore } from "./stores/chat";
@@ -7,31 +7,47 @@ import { useChatStore } from "./stores/chat";
 const chatStore = useChatStore();
 const input = ref("");
 const messageList = ref<HTMLElement | null>(null);
+const followLatest = ref(true);
 
 async function submit() {
   const content = input.value.trim();
 
-  if (!content || chatStore.isSending) {
-    return;
-  }
+  if (!content || chatStore.isSending) return;
 
   input.value = "";
+  followLatest.value = true;
   await chatStore.sendMessage(content);
 }
 
-// 消息增加后，自动滚动到最新消息。
+async function retry() {
+  followLatest.value = true;
+  await chatStore.retryMessage();
+}
+
+function updateFollowLatest() {
+  const element = messageList.value;
+  if (element) {
+    followLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight < 64;
+  }
+}
+
+// 流式输出时消息条数不变，所以还要观察最后一条消息的内容长度。
 watch(
-  () => chatStore.messages.length,
+  () => [
+    chatStore.messages.length,
+    chatStore.messages.at(-1)?.content.length,
+    chatStore.messages.at(-1)?.notice,
+    chatStore.isSending,
+  ],
   async () => {
     await nextTick();
-
-    const element = messageList.value;
-    element?.scrollTo({
-      top: element.scrollHeight,
-      behavior: "smooth",
-    });
+    if (followLatest.value && messageList.value) {
+      messageList.value.scrollTop = messageList.value.scrollHeight;
+    }
   },
 );
+
+onBeforeUnmount(chatStore.stopGenerating);
 </script>
 
 <template>
@@ -43,38 +59,47 @@ watch(
       <header>
         <div>
           <h1>校园 AI 助手</h1>
-          <p>春风有信，一问即答</p>
+          <p>边生成，边显示</p>
         </div>
-        <span>春日</span>
+        <span>流式聊天</span>
       </header>
 
-      <div ref="messageList" class="messages">
+      <div ref="messageList" class="messages" @scroll="updateFollowLatest">
         <p v-if="chatStore.messages.length === 0" class="welcome">
-          你好呀，我是校园 AI 助手。春风正好，想问我什么？
+          你好，我是校园 AI 助手，请输入问题。
         </p>
 
-        <MessageItem v-for="message in chatStore.messages" :key="message.id" :message="message" />
+        <template v-for="message in chatStore.messages" :key="message.id">
+          <MessageItem :message="message" />
+          <p v-if="message.notice" class="status">{{ message.notice }}</p>
+        </template>
 
-        <p v-if="chatStore.isSending" class="status">校园 AI 助手正在回复……</p>
+        <p v-if="chatStore.isSending" class="status">
+          {{ chatStore.messages.at(-1)?.content ? "正在生成……" : "正在连接模型，请稍候……" }}
+        </p>
       </div>
 
-      <p v-if="chatStore.errorMessage" class="error">
+      <p v-if="chatStore.errorMessage" class="error" role="alert">
         {{ chatStore.errorMessage }}
       </p>
+
+      <button v-if="chatStore.canRetry" type="button" class="retry" @click="retry">
+        重试本次回答
+      </button>
 
       <form class="composer" @submit.prevent="submit">
         <input
           v-model="input"
-          type="text"
           maxlength="1000"
           autocomplete="off"
           placeholder="请输入问题"
           aria-label="聊天内容"
         />
 
-        <button type="submit" :disabled="chatStore.isSending || !input.trim()">
-          {{ chatStore.isSending ? "发送中" : "发送" }}
+        <button v-if="chatStore.isSending" type="button" @click="chatStore.stopGenerating">
+          停止生成
         </button>
+        <button v-else type="submit" :disabled="!input.trim()">发送</button>
       </form>
     </section>
   </main>
@@ -307,5 +332,24 @@ header span {
     height: 100vh;
     border-radius: 0;
   }
+}
+
+/* 输入区与提示文字不参与伸缩，防止被消息区挤走。 */
+header,
+.composer,
+.error,
+.retry,
+.messages > .status {
+  flex-shrink: 0;
+}
+
+.retry {
+  align-self: center;
+  margin: 8px;
+  padding: 6px 14px;
+  border: 1px solid #6d9b7f;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
 }
 </style>
