@@ -1,21 +1,24 @@
 {
-  "name": "web",
+  "name": "@campus-ai/web",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.4.30",
-    "pinia": "^2.1.7",
-    "@campus-ai/shared-types": "workspace:*"
+    "@campus-ai/shared-types": "workspace:*",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.24"
   },
   "devDependencies": {
-    "vite": "^5.3.0",
-    "@vitejs/plugin-vue": "^5.0.5",
-    "vue-tsc": "^2.0.21",
-    "typescript": "^5.5.0"
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^7.2.2",
+    "vue-tsc": "^3.1.4"
   }
 }

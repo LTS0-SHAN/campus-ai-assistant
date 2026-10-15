@@ -1,4 +1,18 @@
-node_modules
-dist
+# 依赖与构建产物可由命令重新生成，不提交到 Git。
+node_modules/
+dist/
+
+# 本地环境变量可能包含 API Key，绝不能提交。
 .env
+.env.*
+!.env.example
+
+# 编辑器和操作系统产生的临时文件。
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志文件。
 *.log
+
