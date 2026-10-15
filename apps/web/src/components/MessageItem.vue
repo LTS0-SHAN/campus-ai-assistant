@@ -1,26 +1,32 @@
 <script setup lang="ts">
 import type { ChatMessage } from "@campus-ai/shared-types";
+import { computed } from "vue";
 
-defineProps<{
+const props = defineProps<{
   message: ChatMessage;
 }>();
 
+// 角色名称映射：把角色翻译成页面上显示的中文。
 const roleNames: Record<ChatMessage["role"], string> = {
   system: "系统",
   user: "我",
   assistant: "校园 AI 助手",
 };
+
+// 把回复里的 [文字](/download/xxx) 替换成下载链接。
+const contentHtml = computed(() => {
+  return props.message.content.replace(
+    /\[([^\]]+)\]\((\/download\/[^)]+)\)/g,
+    '<a href="$2" download class="download-card"><span class="doc-icon">📄</span><span class="doc-name">$1</span></a>',
+  );
+});
 </script>
 
 <template>
   <article :class="['message', message.role]">
     <span class="role">{{ roleNames[message.role] }}</span>
 
-    <!--
-      关键知识点：使用文本插值会自动转义HTML，
-      不使用v-html，避免不可信内容造成XSS。
-    -->
-    <p class="bubble">{{ message.content }}</p>
+    <p class="bubble" v-html="contentHtml"></p>
   </article>
 </template>
 
@@ -89,5 +95,17 @@ const roleNames: Record<ChatMessage["role"], string> = {
   .message {
     max-width: 88%;
   }
+}
+
+.download-card {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid #cfe0cc;
+  border-radius: 10px;
+  color: #4c7a5c;
+  background: #f4f9f0;
+  text-decoration: none;
 }
 </style>
