@@ -110,6 +110,8 @@ async function* streamBailian(
     baseURL: process.env.DASHSCOPE_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1",
     timeout: 300_000,
     maxRetries: 0, // 本实验由用户主动重试，避免隐式重复请求。
+    // 本机使用的OpenCode Go服务要求携带会话标识，百炼会忽略这个头。
+    defaultHeaders: { "x-opencode-session": "campus-ai-assistant" },
   });
 
   try {

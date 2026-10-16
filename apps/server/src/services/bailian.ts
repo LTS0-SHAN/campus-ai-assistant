@@ -35,6 +35,8 @@ export async function chatWithBailian(messages: ChatMessage[]): Promise<string> 
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        // 本机使用的OpenCode Go服务要求携带会话标识，百炼会忽略这个头。
+        "x-opencode-session": "campus-ai-assistant",
       },
       body: JSON.stringify({
         model,
@@ -85,6 +87,8 @@ export async function chatWithBailianOpenAI(messages: ChatMessage[]): Promise<st
     apiKey,
     baseURL,
     timeout: 120_000,
+    // 本机使用的OpenCode Go服务要求携带会话标识，百炼会忽略这个头。
+    defaultHeaders: { "x-opencode-session": "campus-ai-assistant" },
   });
 
   try {
